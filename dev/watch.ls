@@ -2,7 +2,7 @@ require! {
     \path
     \chokidar
     \fs-extra : fs
-    \livescript-async : livescript
+    \livescript : livescript
 }
 
 absolute-path = -> path.normalize path.join __dirname, it
@@ -16,16 +16,18 @@ default-options =
     header: false
 
 ls-ast = (code, options = {}) ->
-      ast = livescript.ast code
-      {filename} = options
-      output = ast.compile-root options
-      output.set-file filename
-      result = output.to-string-with-source-map!
+    ast = livescript.ast code
+    {filename} = options
+    output = ast.compile-root options
+    output.set-file filename
+    result = output.to-string-with-source-map!
 
 compile = (filepath) !->>
     relative-path = path.relative src-path, filepath
-    output = path.join lib-path, (relative-path.replace '.ls', '.js')
-    map-file = "#output.map"
+    relative-js-path = relative-path.replace '.ls', '.js'
+    output = path.join lib-path, relative-js-path
+    relative-map-file = "#relative-js-path.map"
+    map-file = path.join lib-path, relative-map-file
     try
         ls-code = await fs.read-file filepath, \utf8
         options =
@@ -34,7 +36,7 @@ compile = (filepath) !->>
         console.log "compiling #relative-path"
         js-result = ls-ast ls-code, options <<< default-options
             ..source-map = ..map.to-JSON!
-            ..code += "\n//# sourceMappingURL=#map-file\n"
+            ..code += "\n//# sourceMappingURL=#relative-map-file\n"
         fs.output-file output, js-result.code
         fs.output-file map-file, JSON.stringify js-result.map.to-JSON!
     catch
