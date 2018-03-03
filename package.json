@@ -1,7 +1,7 @@
 {
   "name": "ide-livescript",
   "version": "0.0.0",
-  "description": "ide for LiveScript",
+  "description": "LiveScript language support for Atom-IDE",
   "main": "lib/client.js",
   "enhancedScopes": [
     "source.livescript"
