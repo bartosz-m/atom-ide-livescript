@@ -1,7 +1,7 @@
 module.exports = Prefix =
     init: ({@document,@position}) !->
         @lines = @document.get-text!split '\n'
-        @line = @lines.[@position.line]
+        @line = @lines[@position.line]
         @to-position = @line.substring 0, @position.character
         @before = @to-position.substring 0, @to-position.length - 1
         @text =  @to-position .trim-left!

@@ -6,6 +6,8 @@ require! {
     'fuzzysort'
     \source-map : { SourceMapConsumer }
     \./Prefix
+    \./providers/BuildInClassProvider
+    \./providers/OperatorProvider
 }
 
 const connection = LanguageServer.create-connection!
@@ -204,15 +206,20 @@ try
 
     built-in-types = <[
         Boolean
-        Integer
-        String
+        Date
+        Error
+        EvalError
+        Function
         Map
-        Set
+        Number
         Object
         Promise
+        Proxy
+        Set
+        String
+        Symbol
         WeakMap
         WeakSet
-        Proxy
     ]>
     
     KEYWORDS_SHARED = <[
@@ -235,6 +242,19 @@ try
     # for now js keywords
     keywords = LS_KEYWORDS ++ JS_KEYWORDS
     
+    providers =
+        BuildInClassProvider: BuildInClassProvider
+        KeywordProvider:
+            keywords:
+                class: 
+                    description: 'class declaration'
+            get-informations: ({label})->
+                if keyword = @keywords[label]
+                    detail: keyword.description
+                else
+                    {}
+        OperatorProvider: OperatorProvider        
+    
     connection.on-completion (context) ->
         result = []
         try
@@ -245,9 +265,11 @@ try
             scored-keywords = fuzzysort.go prefix.prefix, keywords
             result.push ...scored-keywords.map ->
                 score: it.score
-                label: it.target
+                label: it.targetre
                 kind: CompletionItemKind.Keyword
-                data: "#{it}.KeywordProvider"
+                data: 
+                    provider: "KeywordProvider"
+            result.push ...providers.OperatorProvider.get-suggestions prefix
             if s =  symbols[context.text-document.uri]
                 id = 0
                 variable-names = Array.from new Set s.variables.map (.[in-code-name])
@@ -256,7 +278,9 @@ try
                     score: it.score
                     label: it.target
                     kind:CompletionItemKind.Variable
-                    data: id++
+                    data: 
+                        id: id++
+                        provider: "VariableProvider"
                 result.push ...variable-hints
             if prefix.is-inside-new!
                 types = fuzzysort.go prefix.prefix, built-in-types
@@ -264,14 +288,16 @@ try
                     score: it.score
                     label: it.target
                     kind: CompletionItemKind.Constructor
-                    data: "#{it}.BuildInConstructorProvider"
+                    data: 
+                        provider: "BuildInConstructorProvider"
             else
                 types = fuzzysort.go prefix.prefix, built-in-types
                 result.push ...types.map ->
                     score: it.score
                     label: it.target
                     kind: CompletionItemKind.Class
-                    data: "#{it}.BuildInClassProvider"
+                    data: 
+                        provider: "BuildInClassProvider"
             
             result.sort (a,b) ->
                 if a.score <= b.score => 1
@@ -281,6 +307,11 @@ try
         catch
             connection.console.log "#{e.message}\n#{e.stack}"
         result
+    connection.on-completion-resolve (item) ->
+        if provider-name = item.data?provider
+            if provider = providers[provider-name]
+                item <<< provider.get-informations item
+        item
         
         
 
@@ -306,64 +337,73 @@ try
             parents.push p[type]
             node = p
         parents.reverse!join \->
-
-    # connection.on-hover ({position, text-document},span) ->
-    #     try
-    #         if (valid = last-valid[text-document.uri])
-    #         and ast = valid.ast
-    #             position.line += 1
-    #             first_line = ast.first_line
-    #             {first_column,last_column} = ast
-    #             last_line = ast.last_line
-    #             node-on-line = []
-    #             find-on-line = (node) !->
-    #                 if node.first_line?
-    #                 and last_line >= node.last_line >= position.line >= node.first_line >= first_line
-    #                     node-on-line.push node
-    #             ast.traverse-children find-on-line, true
-    #             ast[]exports.for-each ->
-    #                 find-on-line it
-    #                 it.traverse-children find-on-line, true
-    #             ast[]imports.for-each ->
-    #                 find-on-line it
-    #                 it.traverse-children find-on-line, true
-    #             {first_line,last_line} = ast
-    #             best = ast
-    #             for node in node-on-line
-    #                 if last_line >= node.last_line
-    #                 or node.first_line >= first_line
-    #                     best = node
-    #                     first_line = Math.max first_line, node.first_line
-    #                     last_line = Math.min last_line, node.last_line
-    #             # connection.console.log "position #{JSON.stringify position}"
-    #             # connection.console.log (node-on-line.map -> '' + it.first_column + ',' + it.last_column + it)
-    #             node-on-line = node-on-line.filter ->
-    #                 (it.first_line == best.first_line) and (it.last_line == best.last_line)
-    # 
-    # 
-    #             first_column = 0
-    #             last_column = 100000
-    #             best = node-on-line.0
-    # 
-    #             for node in node-on-line
-    #                 if last_column >= node.last_column >= position.character
-    #                 and position.character >= node.first_column >= first_column
-    #                     best = node
-    #                     first_column = first_column >? node.first_column
-    #                     last_column = last_column <? node.last_column
-    #             contents: [ (node-debug-parents best) + ".**" + best[type] + "**", ...node-debug-info best ]
-    #             range:
-    #                 start:
-    #                     line: best.first_line - 1
-    #                     character: best.first_column
-    #                 end:
-    #                     line: best.last_line - 1
-    #                     character: best.last_column
-    # 
-    #         else
-    #             contents: ["position#{JSON.stringify position}","$#{JSON.stringify textDocument}"]
-    #     catch
-    #         contents: ["error"]
+    
+    # trying to find which **semantic** node is selected
+    connection.on-hover ({position, text-document},span) ->
+        try
+            if (valid = last-valid[text-document.uri])
+            and ast = valid.ast
+                position.line += 1
+                first_line = ast.first_line
+                {first_column,last_column} = ast
+                last_line = ast.last_line
+                node-on-line = []
+                find-on-line = (node) !->
+                    if node.first_line?
+                    and last_line >= node.last_line >= position.line >= node.first_line >= first_line
+                        node-on-line.push node
+                ast.traverse-children find-on-line, true
+                ast[]exports.for-each ->
+                    find-on-line it
+                    it.traverse-children find-on-line, true
+                ast[]imports.for-each ->
+                    find-on-line it
+                    it.traverse-children find-on-line, true
+                {first_line,last_line} = ast
+                best = ast
+                for node in node-on-line
+                    if last_line >= node.last_line
+                    or node.first_line >= first_line
+                        best = node
+                        first_line = Math.max first_line, node.first_line
+                        last_line = Math.min last_line, node.last_line
+                # connection.console.log "position #{JSON.stringify position}"
+                # connection.console.log (node-on-line.map -> '' + it.first_column + ',' + it.last_column + it)
+                node-on-line = node-on-line.filter ->
+                    (it.first_line == best.first_line) and (it.last_line == best.last_line)
+    
+    
+                first_column = 0
+                last_column = 100000
+                best = node-on-line.0
+    
+                for node in node-on-line
+                    if last_column >= node.last_column >= position.character
+                    and position.character >= node.first_column >= first_column
+                        best = node
+                        first_column = first_column >? node.first_column
+                        last_column = last_column <? node.last_column
+                contents = if operator = providers.OperatorProvider.operators[best.op]
+                then
+                    []
+                        ..push operator.detail if operator.detail
+                        ..push operator.documentation if operator.documentation
+                        ..push operator.example if operator.example
+                else [ (node-debug-parents best) + ".**" + best[type] + "**", ...node-debug-info best ]
+                
+                contents: contents
+                range:
+                    start:
+                        line: best.first_line - 1
+                        character: best.first_column
+                    end:
+                        line: best.last_line - 1
+                        character: best.last_column
+    
+            else
+                contents: ["position#{JSON.stringify position}","$#{JSON.stringify textDocument}"]
+        catch
+            contents: ["error"]
                 
 
     node-location = (node) ->
