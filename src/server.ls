@@ -119,7 +119,7 @@ try
         catch
             diagnostics = []
             try
-                # connection.console.log e.message
+                # finding from where error comes from
                 unless e.hash
                     if m = e.message.match /.*at ([^:]+)\:([^\s]+) in/
                         e.hash =
@@ -128,6 +128,13 @@ try
                                 first_column: m.2
                                 last_line: m.1 - 1
                                 last_column: m.2
+                    else if m = e.message.match /.*on line (\d+)/
+                        e.hash =
+                            loc:
+                                first_line: m.1 - 1
+                                first_column: 0
+                                last_line: first_line: m.1 - 1
+                                last_column: 0
                     else
                         e.hash =
                             loc:
