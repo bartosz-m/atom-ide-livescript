@@ -19,6 +19,8 @@ Features:
 ## Errors
 File is on the fly compiled by LiveScript [compiler](https://github.com/bartosz-m/livescript-compiler) and any errors are reported.
 
+![autocompletion](doc/assets/diagnostics-screen.gif)
+
 # Autocompletion
 Very limited at the moment only:
 * keywords
