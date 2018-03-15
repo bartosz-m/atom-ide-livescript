@@ -308,9 +308,12 @@ try
             connection.console.log "#{e.message}\n#{e.stack}"
         result
     connection.on-completion-resolve (item) ->
-        if provider-name = item.data?provider
-            if provider = providers[provider-name]
-                item <<< provider.get-informations item
+        try
+            if provider-name = item.data?provider
+                if provider = providers[provider-name]
+                    item <<< provider.get-informations item
+        catch
+            connection.console.error e.message
         item
         
         
