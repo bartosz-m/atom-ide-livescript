@@ -265,7 +265,7 @@ try
             scored-keywords = fuzzysort.go prefix.prefix, keywords
             result.push ...scored-keywords.map ->
                 score: it.score
-                label: it.targetre
+                label: it.target
                 kind: CompletionItemKind.Keyword
                 data: 
                     provider: "KeywordProvider"
@@ -343,49 +343,48 @@ try
     
     # trying to find which **semantic** node is selected
     connection.on-hover ({position, text-document},span) ->
-        try
+        try            
             if (valid = last-valid[text-document.uri])
             and ast = valid.ast
+                connection.console.log \searching
+                connection.console.log position
                 position.line += 1
                 first_line = ast.first_line
                 {first_column,last_column} = ast
                 last_line = ast.last_line
                 node-on-line = []
+                max-line-length = 1000
+                vposition = (line,character) -> line * max-line-length + character
+                node-range = (node) -> 
+                    {}
+                        ..start = vposition node.first_line, node.first_column
+                        ..end = vposition node.last_line, node.last_column
+                        ..size = ..end - ..start
+                        
+                hover-position = vposition position.line, position.character
                 find-on-line = (node) !->
-                    if node.first_line?
-                    and last_line >= node.last_line >= position.line >= node.first_line >= first_line
+                    range = node-range node
+                    if range.start <= hover-position <= range.end
                         node-on-line.push node
                 ast.traverse-children find-on-line, true
+                                
                 ast[]exports.for-each ->
                     find-on-line it
                     it.traverse-children find-on-line, true
                 ast[]imports.for-each ->
                     find-on-line it
                     it.traverse-children find-on-line, true
-                {first_line,last_line} = ast
-                best = ast
+                
+                connection.console.log node-on-line.length
+    
+                best = node-on-line[* - 1]
+                smallest = node-range best
                 for node in node-on-line
-                    if last_line >= node.last_line
-                    or node.first_line >= first_line
+                    range = node-range node
+                    if range.size < smallest
+                        smallest = range.size
                         best = node
-                        first_line = Math.max first_line, node.first_line
-                        last_line = Math.min last_line, node.last_line
-                # connection.console.log "position #{JSON.stringify position}"
-                # connection.console.log (node-on-line.map -> '' + it.first_column + ',' + it.last_column + it)
-                node-on-line = node-on-line.filter ->
-                    (it.first_line == best.first_line) and (it.last_line == best.last_line)
-    
-    
-                first_column = 0
-                last_column = 100000
-                best = node-on-line.0
-    
-                for node in node-on-line
-                    if last_column >= node.last_column >= position.character
-                    and position.character >= node.first_column >= first_column
-                        best = node
-                        first_column = first_column >? node.first_column
-                        last_column = last_column <? node.last_column
+                
                 contents = if operator = providers.OperatorProvider.operators[best.op]
                 then
                     []
@@ -398,15 +397,15 @@ try
                 range:
                     start:
                         line: best.first_line - 1
-                        character: best.first_column
+                        character: best.first_column <? position.character
                     end:
                         line: best.last_line - 1
-                        character: best.last_column
+                        character: best.last_column >? position.character
     
             else
-                contents: ["position#{JSON.stringify position}","$#{JSON.stringify textDocument}"]
+                contents: ["position #{position.line}, #{position.character}", "nothing"]
         catch
-            contents: ["error"]
+            contents: ["error", "#{e.message}", "#{e.stack}"]
                 
 
     node-location = (node) ->
