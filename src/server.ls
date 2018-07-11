@@ -5,9 +5,10 @@ require! {
     'fs-extra'
     'fuzzysort'
     \source-map : { SourceMapConsumer }
-    \./Prefix
+    \./CompletionContext
     \./providers/BuildInClassProvider
     \./providers/OperatorProvider
+    \./providers/ImportProvider
 }
 
 const connection = LanguageServer.create-connection!
@@ -18,14 +19,12 @@ process.on 'unhandledRejection' !->
     connection.console.log it
 
 const documents = new LanguageServer.TextDocuments!
-connection.console.log 'Loading'
+
 documents.listen connection
 active-context = {}
 { CompletionItemKind, SymbolKind } = LanguageServer
-connection.console.log LanguageServer
-connection.console.log CompletionItemKind
 
-connection.console.log "loading dependency"
+
 try
     require! {
       'livescript' : livescript
@@ -170,8 +169,6 @@ try
     var workspace-root
 
     connection.on-initialize (params) ->
-        connection.console.log 'Initializing'
-        connection.console.log params
         workspace-root := params.root-uri
         capabilities:
             text-document-sync: documents.sync-kind
@@ -180,7 +177,28 @@ try
             hover-provider : true
             document-symbol-provider : true
 
-
+    connection.on-request \compile ({uri,code,options}) ->
+        try
+            if uri
+                code = documents.get uri .get-text!
+            default-options =
+                map: \linked
+                
+            options =
+                filename: uri
+            ast = compiler.generate-ast code, options <<< default-options
+            unless valid = last-valid[uri]
+                valid = last-valid[uri] = {}
+            valid <<< {ast}
+            js-result = compiler.compile-ast {ast,code, options}
+                ..source-map = ..map.to-JSON!
+            delete js-result.ast
+            js-result
+        catch e
+            e
+        
+        
+        
     connection.on-did-change-configuration (change) !->
         settings = change.settings.standard
 
@@ -193,11 +211,6 @@ try
     # Some say that extending prototype of buildins is wrong. 
     # We know better.
     String::trim-left ?= -> @replace.replace /^\s+/, ''
-
-    get-prefix = (text, position) ->
-        text.split '\n'
-        .[position.line].substring 0, position.character
-        .trim-left!
         
     clamp = (value, min, max) ->
         if value >= max      => max
@@ -258,22 +271,21 @@ try
     connection.on-completion (context) ->
         result = []
         try
-            prefix = Prefix.create do
+            completion-context = CompletionContext.create do
                 document: documents.get context.text-document.uri
                 position: context.position
-            connection.console.log prefix
-            scored-keywords = fuzzysort.go prefix.prefix, keywords
+            scored-keywords = fuzzysort.go completion-context.prefix, keywords
             result.push ...scored-keywords.map ->
                 score: it.score
                 label: it.target
                 kind: CompletionItemKind.Keyword
                 data: 
                     provider: "KeywordProvider"
-            result.push ...providers.OperatorProvider.get-suggestions prefix
-            if s =  symbols[context.text-document.uri]
+            result.push ...providers.OperatorProvider.get-suggestions completion-context
+            if s =  symbols[completion-context.document.uri]
                 id = 0
                 variable-names = Array.from new Set s.variables.map (.[in-code-name])
-                sorted = fuzzysort.go prefix.prefix, variable-names
+                sorted = fuzzysort.go completion-context.prefix, variable-names
                 variable-hints = sorted.slice 0, 4 .map ->
                     score: it.score
                     label: it.target
@@ -282,8 +294,10 @@ try
                         id: id++
                         provider: "VariableProvider"
                 result.push ...variable-hints
-            if prefix.is-inside-new!
-                types = fuzzysort.go prefix.prefix, built-in-types
+            if completion-context.is-inside-import!
+                result.push ...ImportProvider.provide-completion completion-context
+            if completion-context.is-inside-new!
+                types = fuzzysort.go completion-context.prefix, built-in-types
                 result.push ...types.map ->
                     score: it.score
                     label: it.target
@@ -291,7 +305,7 @@ try
                     data: 
                         provider: "BuildInConstructorProvider"
             else
-                types = fuzzysort.go prefix.prefix, built-in-types
+                types = fuzzysort.go completion-context.prefix, built-in-types
                 result.push ...types.map ->
                     score: it.score
                     label: it.target
@@ -346,8 +360,6 @@ try
         try            
             if (valid = last-valid[text-document.uri])
             and ast = valid.ast
-                connection.console.log \searching
-                connection.console.log position
                 position.line += 1
                 first_line = ast.first_line
                 {first_column,last_column} = ast
@@ -364,7 +376,7 @@ try
                 hover-position = vposition position.line, position.character
                 find-on-line = (node) !->
                     range = node-range node
-                    if range.start <= hover-position <= range.end
+                    if range.start <= hover-position < range.end
                         node-on-line.push node
                 ast.traverse-children find-on-line, true
                                 
@@ -374,9 +386,7 @@ try
                 ast[]imports.for-each ->
                     find-on-line it
                     it.traverse-children find-on-line, true
-                
-                connection.console.log node-on-line.length
-    
+                    
                 best = node-on-line[* - 1]
                 smallest = node-range best
                 for node in node-on-line
@@ -430,9 +440,7 @@ try
 
     connection.on-document-symbol ({text-document}) ->
         result = []
-        try
-            connection.console.log "symbols of #{text-document.uri}"
-        
+        try        
             if (valid = last-valid[text-document.uri])
             and ast = valid.ast
                 walk = (node, parent) !->
@@ -475,6 +483,5 @@ function diagnose textDocument
     const text = textDocument.get-text!
     verify uri, text
 
-connection.console.log 'listening'
 connection.listen!
 

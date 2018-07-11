@@ -48,6 +48,11 @@
       "versions": {
         "0.1.0": "provideOutlines"
       }
+    },
+    "livescript-ide.provider": {
+      "versions": {
+        "0.0.2": "provide"
+      }
     }
   },
   "scripts": {
