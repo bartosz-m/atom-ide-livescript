@@ -2,7 +2,6 @@
 require! {
     'vscode-languageserver' : LanguageServer
     'path': path
-    'fs-extra'
     'fuzzysort'
     \source-map : { SourceMapConsumer }
     \./CompletionContext
