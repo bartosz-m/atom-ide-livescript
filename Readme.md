@@ -12,7 +12,7 @@ Features:
 - [ ] outline view
 - [ ] data tips
 - [ ] signature
-- [ ] integration with live preview
+- [x] integration with live preview
 - [ ] integration with build system
 
 # Diagnostics
@@ -22,15 +22,20 @@ File is on the fly compiled by LiveScript [compiler](https://github.com/bartosz-
 ![autocompletion](doc/assets/diagnostics-screen.gif)
 
 # Autocompletion
-Very limited at the moment only:
+Very limited at the moment:
 * keywords
 * build-in types
 * variables in current file
+* imports (simple)
 
 ![autocompletion](doc/assets/autocompletion-screen.gif)
+There is limited support for imports autocompletion - only `require! {}` and esm flavored `import` work.
+![autocompletion](doc/assets/autocompletion-screen-import.gif)
+![autocompletion](doc/assets/autocompletion-screen-require.gif)
 ![autocompletion](doc/assets/autocompletion-screen01.gif)
 
 # Hover
+Provides simple information based on official livescript documentation.
 
 ![autocompletion](doc/assets/hover-screen.gif)
 
