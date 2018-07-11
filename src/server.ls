@@ -174,7 +174,7 @@ try
             text-document-sync: documents.sync-kind
             completion-provider:
                 resolve-provider: true
-            hover-provider : true
+            # hover-provider : true
             document-symbol-provider : true
 
     connection.on-request \compile ({uri,code,options}) ->
