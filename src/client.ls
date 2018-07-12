@@ -18,9 +18,12 @@ StandardLanguageClient.prototype <<<
   start-server-process:  ->
       server-file = require.resolve('./server')
       Promise.resolve @spawnChildNode [require.resolve('./server'), '--stdio']
+      .then ->
+          console.log 'server started'
+          it
       .catch (e) !->
-        console.log e
-        throw e
+          console.log e
+          throw e
   
   log: !->
       console.log "server:", it.message if @debug 

@@ -1,11 +1,12 @@
 require! {
-    'fuzzysort'
-    'vscode-languageserver' : LanguageServer
+    \fuzzysort
+    \vscode-languageserver : LanguageServer
 }
 
 { CompletionItemKind, SymbolKind } = LanguageServer
 
 module.exports =
+    name: \OperatorProvider
     # same order as on livescript.net
     operators: 
         '**' : 
@@ -63,12 +64,12 @@ module.exports =
         for k,v of @operators
             operators.push v.text ? k
         scored-operators = fuzzysort.go prefix.prefix, operators
-        scored-operators.map ->
+        scored-operators.map ~>
             score: it.score
             label: it.target
             kind: CompletionItemKind.Keyword
             data:
-                provider: "OperatorProvider"
+                provider: @name
                 
     get-informations: (item) ->
         unless operator = @operators[item.label]

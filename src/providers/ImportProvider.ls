@@ -2,15 +2,35 @@ require! {
     \path
     \fs
     \fuzzysort
-    'vscode-languageserver' : LanguageServer
+    \vscode-languageserver : LanguageServer
 }
 
 const { CompletionItemKind, SymbolKind } = LanguageServer
 
 module.exports = ImportProvider =
-    provide-completion: (context) ->
+    name: \ImportProvider
+    
+    install: (completion-context)!->
+      completion-context.is-inside-import = ->
+          indent = @indent
+          line-chain = [@line]
+          for i from @position.line - 1 to 0 by -1
+              line = @lines[i]
+              line-indent = line.match /^\s*/ .0.length
+              if line-indent < indent
+                  indent = line-indent
+                  line-chain.push line
+                  
+          for line in line-chain
+              if line.trim!match /\s*(import(?: all)?|require!)(?:\s+|$)/
+                  return true
+          false
+    
+    is-relevant: (completion-context) -> completion-context.is-inside-import!
+    
+    get-suggestions: (context) ->
         filepath = context.document.uri.match /file:\/\/(.*)/ ?.1
-        if filepath
+        if filepath and @is-relevant context
             import-prefix = path.basename context.prefix
             dirpath = path.dirname filepath
             module-path = context.prefix.replace /^[\\'"]/ '' 
@@ -22,7 +42,7 @@ module.exports = ImportProvider =
             
           # modules = 
           # types = fuzzysort.go context.prefix, built-in-types
-            modules.map ->
+            modules.map ~>
                 score: 1
                 label: it
                 insert-text:
@@ -31,6 +51,8 @@ module.exports = ImportProvider =
                   | 1 => './' + it
                   | _ => it
                 kind: CompletionItemKind.Module
+                data: 
+                    provider: @name
             # sorted = fuzzysort.go import-prefix, modules
             # .map ->
             #     score: it.score
@@ -38,3 +60,6 @@ module.exports = ImportProvider =
             #     kind: CompletionItemKind.Class
         else
             []
+            
+    get-informations: (item) -> {}
+        
