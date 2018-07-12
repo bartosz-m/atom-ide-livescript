@@ -7,7 +7,7 @@ module.exports = CompletionContext =
         @before = @to-position.substring 0, @to-position.length - 1
         @text =  @to-position .trim-left!
         @prefix = @text.split ' ' .[* - 1]
-    
+        
     is-inside-new: ->
         const re = /\s*new\s+/
         re.test @before
@@ -23,7 +23,7 @@ module.exports = CompletionContext =
                 line-chain.push line
                 
         for line in line-chain
-            if line.trim!match /\s*(?:import(?: all)?|require!)(?:\s+|$)|/
+            if line.trim!match /\s*(import(?: all)?|require!)(?:\s+|$)/
                 return true
         false
         
