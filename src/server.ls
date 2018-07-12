@@ -4,12 +4,7 @@ require! {
     \path
     \fuzzysort
     \source-map : { SourceMapConsumer }
-    \./CompletionContext
-    \./providers/BuildInClassProvider
-    \./providers/BuildInConstructorProvider
-    \./providers/KeywordProvider
-    \./providers/OperatorProvider
-    \./providers/ImportProvider
+    
 }
 
 const connection = LanguageServer.create-connection!
@@ -29,13 +24,21 @@ active-context = {}
 
 
 try
+    # put imports inside try block to catch potentiall
     require! {
-      'livescript' : livescript
-      'livescript/lib/lexer'
-      'livescript-compiler/lib/livescript/Compiler'
-      'livescript-compiler/lib/livescript/ast/symbols' : {type,parent}
-      'livescript-transform-esm/lib/plugin' : transform-esm
-      'livescript-transform-implicit-async'
+        'livescript' : livescript
+        'livescript/lib/lexer'
+        'livescript-compiler/lib/livescript/Compiler'
+        'livescript-compiler/lib/livescript/ast/symbols' : {type,parent}
+        'livescript-transform-esm/lib/plugin' : transform-esm
+        'livescript-transform-implicit-async'
+      
+        \./CompletionContext
+        \./providers/BuildInClassProvider
+        \./providers/BuildInConstructorProvider
+        \./providers/KeywordProvider
+        \./providers/OperatorProvider
+        \./providers/ImportProvider
     }
     
     compiler = Compiler.create livescript: livescript with {lexer}
@@ -215,49 +218,6 @@ try
     # We know better.
     String::trim-left ?= -> @replace.replace /^\s+/, ''
         
-    clamp = (value, min, max) ->
-        if value >= max      => max
-        else if value <= min => min
-        else  value
-
-    built-in-types = <[
-        Boolean
-        Date
-        Error
-        EvalError
-        Function
-        Map
-        Number
-        Object
-        Promise
-        Proxy
-        Set
-        String
-        Symbol
-        WeakMap
-        WeakSet
-    ]>
-    
-    KEYWORDS_SHARED = <[
-        true false null this void super return throw break continue
-        if else for while switch case default try catch finally
-        function class extends implements new do delete typeof in instanceof
-        let with var const import export debugger yield await
-    ]>
-
-    # The list of keywords that are reserved by JavaScript, but not used.
-    # We throw a syntax error for these to avoid runtime errors.
-    KEYWORDS_UNUSED =
-        <[ enum interface package private protected public static ]>
-
-    JS_KEYWORDS = KEYWORDS_SHARED ++ KEYWORDS_UNUSED
-
-    LS_KEYWORDS = <[ xor match where ]>
-    
-
-    # for now js keywords
-    keywords = LS_KEYWORDS ++ JS_KEYWORDS
-    
     providers = 
         ImportProvider: ImportProvider
         BuildInClassProvider: BuildInClassProvider
@@ -265,20 +225,15 @@ try
         OperatorProvider: OperatorProvider
         KeywordProvider: KeywordProvider   
     
+    for ,provider of providers
+        provider.install? CompletionContext
+    
     connection.on-completion (context) ->
         result = []
         try
             completion-context = CompletionContext.create do
                 document: documents.get context.text-document.uri
                 position: context.position
-            scored-keywords = fuzzysort.go completion-context.prefix, keywords
-            # result.push ...scored-keywords.map ->
-            #     score: it.score
-            #     label: it.target
-            #     kind: CompletionItemKind.Keyword
-            #     data: 
-            #         provider: "KeywordProvider"
-            # result.push ...providers.OperatorProvider.get-suggestions completion-context
             if s =  symbols[completion-context.document.uri]
                 id = 0
                 variable-names = Array.from new Set s.variables.map (.[in-code-name])
@@ -308,8 +263,6 @@ try
 
     connection.on-completion-resolve (item) ->
         try
-            
-            connection.console.log item
             if provider-name = item.data?provider
                 if provider = providers[provider-name]
                     item <<< provider.get-informations item

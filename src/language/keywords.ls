@@ -14,6 +14,6 @@ JS_KEYWORDS = KEYWORDS_SHARED ++ KEYWORDS_UNUSED
 
 LS_KEYWORDS = <[ xor match where ]>
 
-keywords = LS_KEYWORDS ++ JS_KEYWORD
+keywords = LS_KEYWORDS ++ JS_KEYWORDS
 
 module.exports = keywords
