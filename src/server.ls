@@ -1,11 +1,13 @@
 #BEWARE OF USING console.log in any submodule because client and server communicate using standard input
 require! {
-    'vscode-languageserver' : LanguageServer
-    'path': path
-    'fuzzysort'
+    \vscode-languageserver : LanguageServer
+    \path
+    \fuzzysort
     \source-map : { SourceMapConsumer }
     \./CompletionContext
     \./providers/BuildInClassProvider
+    \./providers/BuildInConstructorProvider
+    \./providers/KeywordProvider
     \./providers/OperatorProvider
     \./providers/ImportProvider
 }
@@ -18,6 +20,8 @@ process.on 'unhandledRejection' !->
     connection.console.log it
 
 const documents = new LanguageServer.TextDocuments!
+
+connection.console.log \ready
 
 documents.listen connection
 active-context = {}
@@ -254,18 +258,12 @@ try
     # for now js keywords
     keywords = LS_KEYWORDS ++ JS_KEYWORDS
     
-    providers =
+    providers = 
+        ImportProvider: ImportProvider
         BuildInClassProvider: BuildInClassProvider
-        KeywordProvider:
-            keywords:
-                class: 
-                    description: 'class declaration'
-            get-informations: ({label})->
-                if keyword = @keywords[label]
-                    detail: keyword.description
-                else
-                    {}
-        OperatorProvider: OperatorProvider        
+        BuildInConstructorProvider: BuildInConstructorProvider
+        OperatorProvider: OperatorProvider
+        KeywordProvider: KeywordProvider   
     
     connection.on-completion (context) ->
         result = []
@@ -274,13 +272,13 @@ try
                 document: documents.get context.text-document.uri
                 position: context.position
             scored-keywords = fuzzysort.go completion-context.prefix, keywords
-            result.push ...scored-keywords.map ->
-                score: it.score
-                label: it.target
-                kind: CompletionItemKind.Keyword
-                data: 
-                    provider: "KeywordProvider"
-            result.push ...providers.OperatorProvider.get-suggestions completion-context
+            # result.push ...scored-keywords.map ->
+            #     score: it.score
+            #     label: it.target
+            #     kind: CompletionItemKind.Keyword
+            #     data: 
+            #         provider: "KeywordProvider"
+            # result.push ...providers.OperatorProvider.get-suggestions completion-context
             if s =  symbols[completion-context.document.uri]
                 id = 0
                 variable-names = Array.from new Set s.variables.map (.[in-code-name])
@@ -293,24 +291,11 @@ try
                         id: id++
                         provider: "VariableProvider"
                 result.push ...variable-hints
-            if completion-context.is-inside-import!
-                result.push ...ImportProvider.provide-completion completion-context
-            if completion-context.is-inside-new!
-                types = fuzzysort.go completion-context.prefix, built-in-types
-                result.push ...types.map ->
-                    score: it.score
-                    label: it.target
-                    kind: CompletionItemKind.Constructor
-                    data: 
-                        provider: "BuildInConstructorProvider"
-            else
-                types = fuzzysort.go completion-context.prefix, built-in-types
-                result.push ...types.map ->
-                    score: it.score
-                    label: it.target
-                    kind: CompletionItemKind.Class
-                    data: 
-                        provider: "BuildInClassProvider"
+            for ,provider of providers
+                try
+                    result.push ...provider.get-suggestions completion-context
+                catch
+                    connection.console.log "#{e.message}\n#{e.stack}"
             
             result.sort (a,b) ->
                 if a.score <= b.score => 1
@@ -320,18 +305,18 @@ try
         catch
             connection.console.log "#{e.message}\n#{e.stack}"
         result
+
     connection.on-completion-resolve (item) ->
         try
+            
+            connection.console.log item
             if provider-name = item.data?provider
                 if provider = providers[provider-name]
                     item <<< provider.get-informations item
         catch
             connection.console.error e.message
         item
-        
-        
 
-    
 
     node-debug-info = (node) ->
         result = []
