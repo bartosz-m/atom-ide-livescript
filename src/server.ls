@@ -4,27 +4,22 @@ require! {
     \path
     \fuzzysort
     \source-map : { SourceMapConsumer }
-    
 }
-
-const connection = LanguageServer.create-connection!
-
-process.on 'uncaughtException' !->
-    connection.console.log it
-process.on 'unhandledRejection' !->
-    connection.console.log it
-
-const documents = new LanguageServer.TextDocuments!
-
-connection.console.log \ready
-
-documents.listen connection
-active-context = {}
 { CompletionItemKind, SymbolKind } = LanguageServer
 
 
+const connection = LanguageServer.create-connection!
+
+process.on 'uncaughtException' !-> connection.console.log it
+process.on 'unhandledRejection' !-> connection.console.log it
+
+const documents = new LanguageServer.TextDocuments!
+documents.listen connection
+
+active-context = {}
+
 try
-    # put imports inside try block to catch potentiall
+    # put imports inside try block to catch import errors
     require! {
         'livescript' : livescript
         'livescript/lib/lexer'
@@ -45,8 +40,6 @@ try
     transform-esm.install compiler
     livescript-transform-implicit-async.install compiler
     
-
-
     last-valid = {}
 
     symbols = {}
@@ -180,7 +173,7 @@ try
             text-document-sync: documents.sync-kind
             completion-provider:
                 resolve-provider: true
-            # hover-provider : true
+            hover-provider : true
             document-symbol-provider : true
 
     connection.on-request \compile ({uri,code,options}) ->
@@ -252,11 +245,7 @@ try
                 catch
                     connection.console.log "#{e.message}\n#{e.stack}"
             
-            result.sort (a,b) ->
-                if a.score <= b.score => 1
-                else if a.score >= b.score => -1
-                else 0
-            result
+            result.sort (a,b) -> b.score - a.score
         catch
             connection.console.log "#{e.message}\n#{e.stack}"
         result
@@ -338,7 +327,8 @@ try
                         ..push operator.detail if operator.detail
                         ..push operator.documentation if operator.documentation
                         ..push operator.example if operator.example
-                else [ (node-debug-parents best) + ".**" + best[type] + "**", ...node-debug-info best ]
+                else []
+                # else [ (node-debug-parents best) + ".**" + best[type] + "**", ...node-debug-info best ]
                 
                 contents: contents
                 range:
